@@ -88,6 +88,9 @@ class ProcesRequest implements Runnable {
 	private static final String INDEX = "jdbc";
 	private static final String TYPE = "jdbc";
 	
+	private static long searchedRecs = 0;
+	private static long totalTimeMs = 0;
+	
 	public ProcesRequest(int requestId, String searchStr) {
 		this.requestId = requestId;
 		this.clt = new TransportClient().addTransportAddress(new InetSocketTransportAddress("localhost", 9300));
@@ -107,12 +110,19 @@ class ProcesRequest implements Runnable {
 		searchRequestBuilder.setFrom(0).setSize(60).setExplain(true);
 		
 		long startLng = System.currentTimeMillis();
-		java.util.Date startTime = new java.util.Date(startLng);
 		SearchResponse resp = searchRequestBuilder.execute().actionGet();
-		System.out.println("requestId[" + requestId + "] start[" + startTime + "] end[" + new java.util.Date() + "] " +
+		long timeTakenMs = (System.currentTimeMillis() - startLng);
+		
+		long hitCount = resp.getHits().totalHits();
+		searchedRecs+= hitCount;
+		totalTimeMs+= timeTakenMs;
+		
+		System.out.println("requestId[" + requestId + "] start[" + new java.util.Date(startLng) + "] end[" + new java.util.Date() + "] " +
 				"searchStr[" + qryStr + "] " +
 				"recordCount[" + resp.getHits().totalHits() + "] " +
-				"timeTaken-ms[" + (System.currentTimeMillis() - startLng) + "]");
+				"timeTaken-ms[" + timeTakenMs + "] " +
+				"searchedRecs[" + searchedRecs + "] " +
+				"totalTimeMs[" + totalTimeMs + "]");
 		
 	}
 }
