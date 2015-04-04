@@ -1,0 +1,118 @@
+package search.load;
+
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+import org.elasticsearch.action.search.SearchRequestBuilder;
+import org.elasticsearch.action.search.SearchResponse;
+import org.elasticsearch.action.search.SearchType;
+import org.elasticsearch.client.Client;
+import org.elasticsearch.client.transport.TransportClient;
+import org.elasticsearch.common.transport.InetSocketTransportAddress;
+import org.elasticsearch.index.query.QueryBuilders;
+
+public class ParallelSearch {
+
+	private static final int MAX_REQUEST_COUNT = 50;
+	
+	private static String[] searchStrs = new String[10];
+	
+	/**
+	 * @param args
+	 */
+	public static void main(String[] args) {
+		
+		prepareRequestStrsForLoad();
+		
+		ExecutorService eSvc = Executors.newFixedThreadPool(20);
+		
+		int searchIdx = 0;
+		for (int i=0 ; i<MAX_REQUEST_COUNT ; i++) {
+			eSvc.execute(new ProcesRequest(i, searchStrs[searchIdx]));
+			
+			searchIdx++;
+			if (searchIdx > 9) {
+				searchIdx = 0;
+			}
+		}
+		
+		eSvc.shutdown();
+		System.out.println("DONE...");
+	}
+	
+	private static void prepareRequestStrsForLoad() {
+		int idx=0;
+		searchStrs[idx++] = "Young";
+		searchStrs[idx++] = "Harry";
+		searchStrs[idx++] = "Graham";
+		searchStrs[idx++] = "Collingwood";
+		searchStrs[idx++] = "Turned";
+		searchStrs[idx++] = "Deaf";
+		searchStrs[idx++] = "Best";
+		searchStrs[idx++] = "Cast";
+		searchStrs[idx++] = "Women";
+		searchStrs[idx] = "Harry";
+	}
+	
+	private static final String INDEX = "jdbc";
+	private static final String TYPE = "jdbc";
+	
+	private static void forTest(Client clt) {
+		
+		int idx = 0;
+		for (String searchStr : searchStrs) {
+			SearchRequestBuilder searchRequestBuilder = clt.prepareSearch(INDEX);
+			searchRequestBuilder.setTypes(TYPE);
+			searchRequestBuilder.setSearchType(SearchType.DEFAULT);
+			searchRequestBuilder.setQuery(QueryBuilders.queryString(searchStr));
+			searchRequestBuilder.setFrom(0).setSize(60).setExplain(true);
+			
+			long startLng = System.currentTimeMillis();
+			java.util.Date startTime = new java.util.Date(startLng);
+			SearchResponse resp = searchRequestBuilder.execute().actionGet();
+			System.out.println("requestId[" + (++idx) + "] start[" + startTime + "] end[" + new java.util.Date() + "] " +
+					"searchStr[" + searchStr + "] " +
+					"recordCount[" + resp.getHits().totalHits() + "] " +
+					"timeTaken-ms[" + (System.currentTimeMillis() - startLng) + "]");
+		}
+	}
+
+}
+
+class ProcesRequest implements Runnable {
+	
+	private int requestId = -1;
+	private Client clt = null;
+	private String searchStr = null;
+	
+	private static final String INDEX = "jdbc";
+	private static final String TYPE = "jdbc";
+	
+	public ProcesRequest(int requestId, String searchStr) {
+		this.requestId = requestId;
+		this.clt = new TransportClient().addTransportAddress(new InetSocketTransportAddress("localhost", 9300));
+		this.searchStr = searchStr;
+	}
+	
+	public void run() {
+		searchDocument(clt, searchStr);
+	}
+	
+	public void searchDocument(Client clt, String qryStr) {
+
+		SearchRequestBuilder searchRequestBuilder = clt.prepareSearch(INDEX);
+		searchRequestBuilder.setTypes(TYPE);
+		searchRequestBuilder.setSearchType(SearchType.DEFAULT);
+		searchRequestBuilder.setQuery(QueryBuilders.queryString(qryStr));
+		searchRequestBuilder.setFrom(0).setSize(60).setExplain(true);
+		
+		long startLng = System.currentTimeMillis();
+		java.util.Date startTime = new java.util.Date(startLng);
+		SearchResponse resp = searchRequestBuilder.execute().actionGet();
+		System.out.println("requestId[" + requestId + "] start[" + startTime + "] end[" + new java.util.Date() + "] " +
+				"searchStr[" + qryStr + "] " +
+				"recordCount[" + resp.getHits().totalHits() + "] " +
+				"timeTaken-ms[" + (System.currentTimeMillis() - startLng) + "]");
+		
+	}
+}
